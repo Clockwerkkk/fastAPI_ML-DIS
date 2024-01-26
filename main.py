@@ -1,13 +1,8 @@
 from enum import Enum
-from fastapi import FastAPI
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, UploadFile
-from pydantic import BaseModel
-from datetime import datetime
-from typing import List
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException
+#pip install python-multipart
 import pandas as pd
-from io import BytesIO
 
 
 app = FastAPI()
@@ -48,30 +43,26 @@ post_db = [
 
 @app.get('/')
 def root():
-    return ('Welcome to the Dog Service!')
+    return 'Welcome to the Dog Service!'
 
 
 @app.post('/post')
-def post() -> Timestamp:
-    curr_time = datetime.now().timestamp()
-    time = Timestamp(id=len(post_db), timestamp=int(curr_time))
+def post():
+    time_now = pd.Timestamp.now(tz='Etc/GMT+3')
+    time = Timestamp(id=len(post_db), timestamp=int(time_now))
     post_db.append(time)
     return time
 
 
 @app.get('/dog')
-def get_dogs(kind: DogType = None) -> List[Dog]:
+def get_dogs(kind: DogType = None):
     if kind is None:
         return list(dogs_db.values())
-    list_dogs = []
-    for dog in dogs_db.values():
-        if dog.kind == kind:
-            list_dogs.append(dog)
-    return list_dogs
+    return dogs_db[kind]
 
 
 @app.post('/dog')
-def create_dog(dog: Dog) -> Dog:
+def create_dog(dog: Dog):
     if dog.pk in dogs_db:
         raise HTTPException(status_code=404, detail='This dog already exists!')
     dogs_db[dog.pk] = dog
@@ -79,14 +70,14 @@ def create_dog(dog: Dog) -> Dog:
 
 
 @app.get('/dog/{pk}')
-def get_dog_by_pk(pk: int) -> Dog:
+def get_dog_by_pk(pk: int):
     if pk not in dogs_db:
-        raise HTTPException(status_code=404, detail='This pk does not exist!')
+        raise HTTPException(status_code=404, detail='This dog does not exist!')
     return dogs_db[pk]
 
 
 @app.patch('/dog/{pk}')
-def update_dog(pk: int, dog: Dog) -> Dog:
+def update_dog(pk: int, dog: Dog):
     if pk not in dogs_db:
         raise HTTPException(status_code=404, detail='This pk does not exist!')
     if pk != dog.pk:
@@ -94,33 +85,6 @@ def update_dog(pk: int, dog: Dog) -> Dog:
     dogs_db[pk] = dog
     return dog
 
-
-@app.get('/get_csv')
-def get_csv() -> FileResponse:
-    dog_list = [vars(dog) for dog in dogs_db.values()]
-    df = pd.DataFrame(dog_list)
-    df.to_csv('all_dogs.csv')
-    response = FileResponse(path='all_dogs.csv', media_type='text/csv', filename='all_dogs_download.csv')
-    return response
-
-
-@app.post('/upload_file')
-def upload(file: UploadFile):
-    return file.file.read()
-
-
-@app.post('/upload_csv')
-def upload_csv(file: UploadFile):
-    content = file.file.read() # считываем байтовое содержимое
-    buffer = BytesIO(content) # создаем буфер типа BytesIO
-    df = pd.read_csv(buffer, index_col=0)
-    buffer.close()
-    file.close()  # закрывается именно сам файл
-    # на самом деле можно не вызывать .close(), тк питон сам освобождает память при уничтожении объекта
-    # но это просто хорошая практика, так гарантируется корректное освобождение ресурсов
-    df.index = df.index + max(dogs_db)
-    df['pk'] = df.index
-    return df.to_dict(orient='index')
 
 
 
